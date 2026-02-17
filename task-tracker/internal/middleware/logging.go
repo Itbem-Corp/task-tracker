@@ -1,10 +1,13 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 )
+
+var logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 // responseWriter wraps http.ResponseWriter to capture the status code.
 type responseWriter struct {
@@ -17,7 +20,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-// Logger is an HTTP middleware that logs method, path, status, and duration.
+// Logger is an HTTP middleware that logs method, path, status, duration, and remote address.
 func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -25,11 +28,12 @@ func Logger(next http.Handler) http.Handler {
 
 		next.ServeHTTP(wrapped, r)
 
-		log.Printf("%s %s %d %s",
-			r.Method,
-			r.URL.Path,
-			wrapped.statusCode,
-			time.Since(start),
+		logger.Info("request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", wrapped.statusCode,
+			"duration", time.Since(start).String(),
+			"remote_addr", r.RemoteAddr,
 		)
 	})
 }

@@ -21,6 +21,7 @@ func main() {
 	}
 
 	taskStore := store.New()
+	h := handlers.NewHandler(taskStore)
 
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
@@ -28,7 +29,14 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(chimw.Recoverer)
 
-	handlers.RegisterRoutes(r, taskStore)
+	r.Route("/tasks", func(r chi.Router) {
+		r.Get("/", h.ListTasks)
+		r.Post("/", h.CreateTask)
+		r.Get("/{id}", h.GetTask)
+		r.Put("/{id}", h.UpdateTask)
+		r.Delete("/{id}", h.DeleteTask)
+	})
+	r.Get("/health", h.HealthCheck)
 
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("task-tracker listening on %s", addr)

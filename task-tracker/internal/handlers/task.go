@@ -40,11 +40,11 @@ func createTask(s *store.TaskStore) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		if req.Title == "" {
-			writeError(w, http.StatusUnprocessableEntity, "title is required")
+		if err := req.Validate(); err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
-		task := s.Create(req.Title, req.Description)
+		task := s.Create(req.Title, req.Description, req.Status)
 		writeJSON(w, http.StatusCreated, task)
 	}
 }
@@ -70,8 +70,8 @@ func updateTask(s *store.TaskStore) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		if req.Status != nil && !models.IsValidStatus(*req.Status) {
-			writeError(w, http.StatusUnprocessableEntity, "invalid status value")
+		if err := req.Validate(); err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
 		task, err := s.Update(id, req)
@@ -101,5 +101,5 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+	writeJSON(w, status, models.ErrorResponse{Error: message})
 }

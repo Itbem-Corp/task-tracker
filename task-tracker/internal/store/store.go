@@ -22,17 +22,21 @@ func New() *TaskStore {
 	}
 }
 
-// Create adds a new task and returns it.
-func (s *TaskStore) Create(title, description string) *models.Task {
+// Create adds a new task and returns it. If status is empty, defaults to pending.
+func (s *TaskStore) Create(title, description, status string) *models.Task {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if status == "" {
+		status = models.StatusPending
+	}
 
 	now := time.Now().UTC()
 	task := &models.Task{
 		ID:          uuid.New().String(),
 		Title:       title,
 		Description: description,
-		Status:      models.StatusPending,
+		Status:      status,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}

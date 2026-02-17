@@ -1,13 +1,17 @@
 package store
 
 import (
-	"fmt"
+	"errors"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/itbem-corp/task-tracker/internal/models"
 )
+
+// ErrTaskNotFound is returned when a task cannot be found by ID.
+var ErrTaskNotFound = errors.New("task not found")
 
 // TaskStore provides thread-safe in-memory storage for tasks.
 type TaskStore struct {
@@ -44,7 +48,7 @@ func (s *TaskStore) Create(title, description, status string) *models.Task {
 	return task
 }
 
-// GetAll returns all tasks as a slice.
+// GetAll returns all tasks sorted by created_at descending (newest first).
 func (s *TaskStore) GetAll() []*models.Task {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -53,6 +57,9 @@ func (s *TaskStore) GetAll() []*models.Task {
 	for _, t := range s.tasks {
 		result = append(result, t)
 	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
 	return result
 }
 
@@ -63,7 +70,7 @@ func (s *TaskStore) GetByID(id string) (*models.Task, error) {
 
 	task, ok := s.tasks[id]
 	if !ok {
-		return nil, fmt.Errorf("task not found: %s", id)
+		return nil, ErrTaskNotFound
 	}
 	return task, nil
 }
@@ -75,7 +82,7 @@ func (s *TaskStore) Update(id string, req models.UpdateTaskRequest) (*models.Tas
 
 	task, ok := s.tasks[id]
 	if !ok {
-		return nil, fmt.Errorf("task not found: %s", id)
+		return nil, ErrTaskNotFound
 	}
 
 	if req.Title != nil {
@@ -98,7 +105,7 @@ func (s *TaskStore) Delete(id string) error {
 	defer s.mu.Unlock()
 
 	if _, ok := s.tasks[id]; !ok {
-		return fmt.Errorf("task not found: %s", id)
+		return ErrTaskNotFound
 	}
 	delete(s.tasks, id)
 	return nil

@@ -5,10 +5,12 @@ on:
     branches: [master, task-tracker]
     paths:
       - 'task-tracker/**'
+      - '.github/workflows/task-tracker-ci.yml'
   pull_request:
     branches: [master]
     paths:
       - 'task-tracker/**'
+      - '.github/workflows/task-tracker-ci.yml'
 
 defaults:
   run:

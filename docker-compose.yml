@@ -1,28 +1,138 @@
 version: '3.9'
 
 services:
-  hello-world:
+  # Landing Page (Astro.js)
+  landing:
     build:
-      context: .
+      context: ./saas-landing
       dockerfile: Dockerfile
-    container_name: hello-world-server
+    container_name: saas-landing
     ports:
-      - "8080:8080"
+      - "3000:3000"
+    environment:
+      - PUBLIC_SITE_URL=http://localhost:3000
+      - PUBLIC_DASHBOARD_URL=http://localhost:3001
+      - PUBLIC_API_URL=http://localhost:4000
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - saas-network
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # Dashboard (Next.js)
+  dashboard:
+    build:
+      context: ./saas-dashboard
+      dockerfile: Dockerfile
+    container_name: saas-dashboard
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY:-pk_test_xxx}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - saas-network
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # API (Express + Prisma)
+  api:
+    build:
+      context: ./saas-api
+      dockerfile: Dockerfile
+    container_name: saas-api
+    ports:
+      - "4000:3001"
+    environment:
+      - PORT=3001
+      - NODE_ENV=development
+      - LOG_LEVEL=info
+      - DATABASE_URL=postgresql://saas_user:saas_pass@postgres:5432/saas_db?schema=public
+      - CORS_ORIGIN=http://localhost:3000
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - JWT_EXPIRES_IN=7d
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-sk_test_xxx}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_xxx}
+      - REDIS_URL=redis://redis:6379
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - saas-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: saas-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=saas_user
+      - POSTGRES_PASSWORD=saas_pass
+      - POSTGRES_DB=saas_db
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saas_user -d saas_db"]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 5s
+      retries: 5
+      start_period: 10s
     networks:
-      - hello-world-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      - saas-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: saas-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - saas-network
 
 networks:
-  hello-world-network:
+  saas-network:
     driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
